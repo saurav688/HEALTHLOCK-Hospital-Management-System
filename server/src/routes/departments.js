@@ -24,4 +24,20 @@ router.post("/", async (req, res) => {
   }
 });
 
+// DELETE department
+router.delete("/:id", async (req, res) => {
+  try {
+    const department = await Department.findByIdAndDelete(req.params.id);
+    
+    if (!department) {
+      return res.status(404).json({ message: "Department not found" });
+    }
+    
+    res.json({ message: "Department deleted successfully" });
+  } catch (err) {
+    console.error("Error deleting department", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 export default router;

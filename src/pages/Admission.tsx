@@ -21,6 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Trash2 } from "lucide-react";
 
 const Admission = () => {
   const [patients, setPatients] = useState([]);
@@ -84,6 +85,37 @@ const Admission = () => {
       });
     } catch {
       toast.error("Error admitting patient");
+    }
+  };
+
+  const deleteAdmission = async (admissionId: string, roomId: string) => {
+    if (!confirm("Are you sure you want to delete this admission?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/admissions/${admissionId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete admission");
+      }
+
+      // Mark room as Available again
+      if (roomId) {
+        await fetch(`${API_BASE}/rooms/${roomId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "Available" }),
+        });
+      }
+
+      toast.success("Admission deleted successfully!");
+      loadData();
+    } catch (error) {
+      console.error("Error deleting admission:", error);
+      toast.error("Error deleting admission");
     }
   };
 
@@ -225,6 +257,7 @@ const Admission = () => {
                 <TableHead>Room</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Department</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -232,8 +265,18 @@ const Admission = () => {
                 <TableRow key={a._id}>
                   <TableCell>{a.patient?.name}</TableCell>
                   <TableCell>Room {a.room?.roomNo}</TableCell>
-                  <TableCell>{a.admissionDate}</TableCell>
-                  <TableCell>{a.department}</TableCell>
+                  <TableCell>{new Date(a.admissionDate).toLocaleDateString()}</TableCell>
+                  <TableCell>{a.patient?.department || "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => deleteAdmission(a._id, a.room?._id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Eye, Plus } from "lucide-react";
+import { Eye, Plus, Trash2 } from "lucide-react";
 
 import {
   Dialog, DialogContent, DialogHeader,
@@ -33,6 +33,8 @@ const Checkup = () => {
     diagnosis: "",
     status: "Pending",
   });
+
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const loadCheckups = async () => {
     const res = await fetch(`${API_BASE}/checkups`);
@@ -63,6 +65,7 @@ const Checkup = () => {
     if (!res.ok) return toast.error("Error adding checkup");
     toast.success("Checkup Added!");
     loadCheckups();
+    setDialogOpen(false);
 
     setForm({
       patient: "",
@@ -70,6 +73,28 @@ const Checkup = () => {
       diagnosis: "",
       status: "Pending",
     });
+  };
+
+  const deleteCheckup = async (checkupId: string) => {
+    if (!confirm("Are you sure you want to delete this checkup?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/checkups/${checkupId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete checkup");
+      }
+
+      toast.success("Checkup deleted successfully!");
+      loadCheckups();
+    } catch (error) {
+      console.error("Error deleting checkup:", error);
+      toast.error("Error deleting checkup");
+    }
   };
 
   useEffect(() => {
@@ -99,7 +124,7 @@ const Checkup = () => {
         </div>
 
         {/* Add Checkup Button */}
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
@@ -187,9 +212,19 @@ const Checkup = () => {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="icon">
-                      <Eye className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="ghost" size="icon">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => deleteCheckup(c._id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

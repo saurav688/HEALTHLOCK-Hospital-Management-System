@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -63,6 +63,28 @@ const Departments = () => {
       fetchDepartments();
     } catch {
       toast.error("Error adding department ❌");
+    }
+  };
+
+  const deleteDepartment = async (departmentId: string) => {
+    if (!confirm("Are you sure you want to delete this department?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/departments/${departmentId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete department");
+      }
+
+      toast.success("Department deleted successfully!");
+      fetchDepartments();
+    } catch (error) {
+      console.error("Error deleting department:", error);
+      toast.error("Error deleting department");
     }
   };
 
@@ -123,6 +145,7 @@ const Departments = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Location</TableHead>
                 <TableHead>Facilities</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
 
@@ -130,8 +153,22 @@ const Departments = () => {
               {departments.map((dep: any) => (
                 <TableRow key={dep._id}>
                   <TableCell className="font-medium">{dep.name}</TableCell>
-                  <TableCell>{dep.location}</TableCell>
-                  <TableCell>{dep.facilities}</TableCell>
+                  <TableCell>{dep.location || "-"}</TableCell>
+                  <TableCell className="max-w-xs">
+                    <div className="truncate" title={dep.facilities}>
+                      {dep.facilities || "-"}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => deleteDepartment(dep._id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

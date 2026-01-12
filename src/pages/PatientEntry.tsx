@@ -13,9 +13,58 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Trash2 } from "lucide-react";
+import { useEffect, useState } from "react";
 
 const PatientEntry = () => {
   const { register, handleSubmit, setValue, reset } = useForm();
+  const [patients, setPatients] = useState([]);
+
+  const loadPatients = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/patients`);
+      const data = await res.json();
+      setPatients(data);
+    } catch (error) {
+      console.error("Error loading patients:", error);
+      toast.error("Failed to load patients");
+    }
+  };
+
+  const deletePatient = async (patientId: string) => {
+    if (!confirm("Are you sure you want to delete this patient?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/patients/${patientId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete patient");
+      }
+
+      toast.success("Patient deleted successfully!");
+      loadPatients();
+    } catch (error) {
+      console.error("Error deleting patient:", error);
+      toast.error("Error deleting patient");
+    }
+  };
+
+  useEffect(() => {
+    loadPatients();
+  }, []);
 
   const onSubmit = async (values: any) => {
     try {
@@ -33,6 +82,7 @@ const PatientEntry = () => {
 
       toast.success("Patient Registered Successfully! 🎉");
       reset();
+      loadPatients(); // Refresh the patient list
     } catch (err: any) {
       toast.error(err.message);
     }
@@ -142,6 +192,61 @@ const PatientEntry = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Patients List */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Registered Patients</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Age</TableHead>
+                  <TableHead>Gender</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {patients.map((patient: any) => (
+                  <TableRow key={patient._id}>
+                    <TableCell className="font-medium">{patient.name}</TableCell>
+                    <TableCell>{patient.age}</TableCell>
+                    <TableCell>{patient.gender}</TableCell>
+                    <TableCell>{patient.phone}</TableCell>
+                    <TableCell>{patient.department}</TableCell>
+                    <TableCell>
+                      <Badge variant={patient.status === "Active" ? "default" : "secondary"}>
+                        {patient.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={() => deletePatient(patient._id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {patients.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
+                      No patients registered yet
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
     </form>
   );

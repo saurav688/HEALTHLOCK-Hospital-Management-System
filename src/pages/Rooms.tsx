@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 
 const Rooms = () => {
   const [rooms, setRooms] = useState([]);
@@ -70,6 +70,28 @@ const Rooms = () => {
       fetchRooms();
     } catch {
       toast.error("Error adding room");
+    }
+  };
+
+  const deleteRoom = async (roomId: string) => {
+    if (!confirm("Are you sure you want to delete this room?")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/rooms/${roomId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to delete room");
+      }
+
+      toast.success("Room deleted successfully!");
+      fetchRooms();
+    } catch (error) {
+      console.error("Error deleting room:", error);
+      toast.error("Error deleting room");
     }
   };
 
@@ -148,6 +170,7 @@ const Rooms = () => {
                 <TableHead>Status</TableHead>
                 <TableHead>Daily Charge</TableHead>
                 <TableHead>Other Charges</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -156,8 +179,18 @@ const Rooms = () => {
                   <TableCell>{room.roomNo}</TableCell>
                   <TableCell>{room.type}</TableCell>
                   <TableCell><Badge className={getStatusColor(room.status)}>{room.status}</Badge></TableCell>
-                  <TableCell>{room.dailyCharge}</TableCell>
-                  <TableCell>{room.otherCharges || "-"}</TableCell>
+                  <TableCell>${room.dailyCharge}</TableCell>
+                  <TableCell>{room.otherCharges ? `$${room.otherCharges}` : "-"}</TableCell>
+                  <TableCell className="text-right">
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      onClick={() => deleteRoom(room._id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
