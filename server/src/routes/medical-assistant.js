@@ -4,6 +4,7 @@ import Doctor from "../models/Doctor.js";
 import Room from "../models/Room.js";
 import Department from "../models/Department.js";
 import Admission from "../models/Admission.js";
+import { generateAIResponse, isAIAvailable, getAIStatus } from "../utils/geminiService.js";
 
 const router = express.Router();
 
@@ -191,7 +192,8 @@ router.post("/query", async (req, res) => {
       success: true,
       answer: "",
       suggestions: [],
-      relatedInfo: {}
+      relatedInfo: {},
+      aiPowered: false
     };
 
     // Helper function to detect Hindi text
@@ -202,6 +204,59 @@ router.post("/query", async (req, res) => {
 
     // Determine if query is in Hindi
     const isHindi = language === 'hi' || containsHindi(query);
+
+    // Try to get AI response first if available
+    console.log(`🔍 Checking AI availability: ${isAIAvailable()}`);
+    if (isAIAvailable()) {
+      console.log("✅ AI is available, attempting to generate response...");
+      try {
+        // Get hospital statistics for context
+        const [patients, doctors, rooms, departments, admissions] = await Promise.all([
+          Patient.countDocuments({ status: 'Active' }),
+          Doctor.countDocuments({ status: 'Active' }),
+          Room.countDocuments({ status: 'Available' }),
+          Department.countDocuments(),
+          Admission.countDocuments({ status: 'Admitted' })
+        ]);
+
+        const hospitalStats = {
+          patients,
+          doctors,
+          availableRooms: rooms,
+          departments,
+          currentAdmissions: admissions
+        };
+
+        const aiResponse = await generateAIResponse(query, language, { hospitalStats });
+        
+        if (aiResponse) {
+          response.answer = aiResponse;
+          response.aiPowered = true;
+          
+          // Add relevant suggestions based on query type
+          if (isHindi) {
+            response.suggestions = [
+              "दवा की जानकारी",
+              "अपॉइंटमेंट बुक करें",
+              "लक्षण जांच",
+              "आपातकालीन सेवाएं"
+            ];
+          } else {
+            response.suggestions = [
+              "Medication information",
+              "Book appointment",
+              "Symptom checker",
+              "Emergency services"
+            ];
+          }
+          
+          return res.json(response);
+        }
+      } catch (aiError) {
+        console.error("AI generation error, falling back to local responses:", aiError.message);
+        // Continue to local processing
+      }
+    }
 
     // Check for medication queries (both English and Hindi names)
     for (const [medName, medInfo] of Object.entries(medicationDatabase)) {
@@ -408,6 +463,17 @@ router.get("/stats", async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching hospital stats:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
+// GET AI status
+router.get("/ai-status", (req, res) => {
+  try {
+    const status = getAIStatus();
+    res.json(status);
+  } catch (err) {
+    console.error("Error fetching AI status:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

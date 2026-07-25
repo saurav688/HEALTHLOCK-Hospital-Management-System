@@ -13,8 +13,16 @@ import checkupRoutes from "./routes/checkups.js";
 import medicalAssistantRoutes from "./routes/medical-assistant.js";
 import authRoutes from "./routes/auth.js";
 import { generalLimiter } from "./middleware/rateLimiter.js";
+import { initializeGemini } from "./utils/geminiService.js";
+import emailService from "./utils/emailService.js";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from server directory (one level up from src)
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const app = express();
 
@@ -48,8 +56,19 @@ mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log("Connected to MongoDB");
+    
+    // Initialize Gemini AI
+    console.log("\n🤖 Initializing AI Services...");
+    initializeGemini();
+
+    // Initialize Email Service (after dotenv is loaded)
+    console.log("📧 Initializing Email Service...");
+    emailService.initializeTransporter();
+    
     app.listen(PORT, () => {
-      console.log(`Server listening on port ${PORT}`);
+      console.log(`\n✅ Server listening on port ${PORT}`);
+      console.log(`📍 API Base: http://localhost:${PORT}/api`);
+      console.log(`🏥 HealthLock Hospital Management System Ready\n`);
     });
   })
   .catch((err) => {

@@ -3,27 +3,45 @@ class SMSService {
   constructor() {
     // Initialize Twilio client if credentials are provided
     this.twilioClient = null;
+    this.isDevelopment = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production';
     
     if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
       try {
         // Uncomment when Twilio is installed
         // const twilio = require('twilio');
         // this.twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+        console.log('✅ Twilio SMS service initialized');
       } catch (error) {
-        console.error('Twilio initialization failed:', error);
+        console.error('❌ Twilio initialization failed:', error);
       }
+    } else {
+      console.log('⚠️  SMS Service running in DEVELOPMENT MODE - OTPs will be logged to console');
     }
   }
 
   async sendSMS(phoneNumber, message) {
     try {
-      // For development/testing, we'll simulate SMS sending
-      if (process.env.NODE_ENV === 'development' || !this.twilioClient) {
-        console.log(`📱 SMS Simulation - To: ${phoneNumber}, Message: ${message}`);
+      // For development/testing, we'll simulate SMS sending and log OTP to console
+      if (this.isDevelopment || !this.twilioClient) {
+        console.log('\n' + '='.repeat(60));
+        console.log('📱 SMS SIMULATION (Development Mode)');
+        console.log('='.repeat(60));
+        console.log(`To: ${phoneNumber}`);
+        console.log(`Message: ${message}`);
+        console.log('='.repeat(60) + '\n');
+        
+        // Extract OTP from message if present
+        const otpMatch = message.match(/\b\d{6}\b/);
+        if (otpMatch) {
+          console.log(`🔑 OTP CODE: ${otpMatch[0]}`);
+          console.log('='.repeat(60) + '\n');
+        }
+        
         return { 
           success: true, 
           messageId: `sim_${Date.now()}`,
-          simulation: true 
+          simulation: true,
+          message: 'SMS simulated in development mode. Check console for OTP.'
         };
       }
 
@@ -35,7 +53,7 @@ class SMSService {
         to: phoneNumber
       });
 
-      console.log('SMS sent successfully:', result.sid);
+      console.log('✅ SMS sent successfully:', result.sid);
       return { success: true, messageId: result.sid };
       */
 
@@ -48,7 +66,7 @@ class SMSService {
       };
 
     } catch (error) {
-      console.error('SMS sending failed:', error);
+      console.error('❌ SMS sending failed:', error);
       return { success: false, error: error.message };
     }
   }
@@ -79,7 +97,14 @@ class SMSService {
       password_reset: `Your HealthLock password reset code is: ${otp}. This code will expire in 10 minutes. Keep this code secure.`
     };
 
-    return this.sendSMS(formattedPhone, messages[purpose] || messages.verification);
+    const result = await this.sendSMS(formattedPhone, messages[purpose] || messages.verification);
+    
+    // In development, also log to a file for easy access
+    if (this.isDevelopment && result.success) {
+      console.log(`\n💡 TIP: Use OTP ${otp} for ${purpose} on phone ${formattedPhone}\n`);
+    }
+    
+    return result;
   }
 
   // Send welcome SMS

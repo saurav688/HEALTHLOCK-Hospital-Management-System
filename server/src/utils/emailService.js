@@ -3,18 +3,34 @@ import nodemailer from "nodemailer";
 class EmailService {
   constructor() {
     this.transporter = null;
-    this.initializeTransporter();
+    // Don't initialize in constructor - dotenv not loaded yet
+    // Will be initialized lazily on first use
   }
 
   initializeTransporter() {
+    const user = process.env.SMTP_USER;
+    const pass = process.env.SMTP_PASS;
+
+    if (!user || !pass || user.includes('your_gmail')) {
+      console.warn('⚠️  Gmail SMTP not configured. OTPs will show in console.');
+      return;
+    }
+
     try {
       this.transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST || 'smtp.gmail.com',
-        port: process.env.SMTP_PORT || 587,
-        secure: false, // true for 465, false for other ports
-        auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS
+        port: parseInt(process.env.SMTP_PORT) || 587,
+        secure: false,
+        auth: { user, pass },
+        tls: { rejectUnauthorized: false }
+      });
+
+      this.transporter.verify((error) => {
+        if (error) {
+          console.error('❌ Gmail SMTP connection failed:', error.message);
+          this.transporter = null;
+        } else {
+          console.log(`✅ Gmail SMTP ready → ${user}`);
         }
       });
     } catch (error) {
@@ -25,10 +41,22 @@ class EmailService {
 
   async sendEmail(to, subject, html, text = null) {
     try {
+      // Lazy initialize on first use (dotenv is loaded by now)
       if (!this.transporter) {
-        console.log('📧 Email Simulation - No transporter configured');
-        console.log(`To: ${to}, Subject: ${subject}`);
-        return { success: true, messageId: `sim_${Date.now()}`, simulation: true };
+        this.initializeTransporter();
+      }
+
+      if (!this.transporter) {
+        // Development mode - show OTP in console clearly
+        const otpMatch = html.match(/<div class="otp-code">(\d{6})<\/div>/);
+        const otp = otpMatch ? otpMatch[1] : 'N/A';
+        console.log('\n' + '='.repeat(50));
+        console.log('📧 EMAIL (Dev Mode - SMTP not configured)');
+        console.log(`To      : ${to}`);
+        console.log(`Subject : ${subject}`);
+        if (otp !== 'N/A') console.log(`OTP CODE: ${otp}  ← Use this to login`);
+        console.log('='.repeat(50) + '\n');
+        return { success: true, messageId: `dev_${Date.now()}`, simulation: true };
       }
 
       const mailOptions = {
@@ -40,7 +68,7 @@ class EmailService {
       };
 
       const result = await this.transporter.sendMail(mailOptions);
-      console.log('Email sent successfully:', result.messageId);
+      console.log('✅ Email sent to:', to, '| ID:', result.messageId);
       return { success: true, messageId: result.messageId };
     } catch (error) {
       console.error('Email sending failed:', error);

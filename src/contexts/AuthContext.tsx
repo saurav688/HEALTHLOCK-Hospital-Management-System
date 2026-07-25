@@ -43,6 +43,7 @@ type AuthAction =
 interface AuthContextType extends AuthState {
   login: (identifier: string, password: string) => Promise<{ success: boolean; message?: string; data?: any }>;
   loginWithGoogle: (idToken: string, phone?: string) => Promise<{ success: boolean; message?: string; data?: any }>;
+  verifyGoogleOTP: (email: string, otp: string) => Promise<{ success: boolean; message?: string; data?: any }>;
   loginWithPhone: (phone: string) => Promise<{ success: boolean; message?: string; data?: any }>;
   verifyPhoneLogin: (phone: string, otp: string) => Promise<{ success: boolean; message?: string; data?: any }>;
   register: (userData: RegisterData) => Promise<{ success: boolean; message?: string; data?: any }>;
@@ -250,12 +251,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
 
-      const response = await fetch(`${API_BASE}/auth/google`, {
+      const response = await fetch(`${API_BASE}/auth/google-otp-send`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idToken, phone }),
+      });
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Google login error:', error);
+      return { success: false, message: 'Google login failed. Please try again.' };
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
+  };
+
+  const verifyGoogleOTP = async (email: string, otp: string) => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+
+      const response = await fetch(`${API_BASE}/auth/google-otp-verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
       });
 
       const result = await response.json();
@@ -273,8 +292,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return result;
     } catch (error) {
-      console.error('Google login error:', error);
-      return { success: false, message: 'Google login failed. Please try again.' };
+      console.error('Google OTP verify error:', error);
+      return { success: false, message: 'OTP verification failed. Please try again.' };
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
     }
@@ -509,6 +528,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ...state,
     login,
     loginWithGoogle,
+    verifyGoogleOTP,
     loginWithPhone,
     verifyPhoneLogin,
     register,

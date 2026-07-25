@@ -40,6 +40,7 @@ export const VoiceAssistant = ({ isOpen, onClose }: VoiceAssistantProps) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [language, setLanguage] = useState<'en' | 'hi'>('en');
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -87,6 +88,12 @@ export const VoiceAssistant = ({ isOpen, onClose }: VoiceAssistantProps) => {
     if ('speechSynthesis' in window) {
       synthesisRef.current = window.speechSynthesis;
     }
+
+    // Check AI status
+    fetch(`${API_BASE}/medical-assistant/ai-status`)
+      .then(res => res.json())
+      .then(data => setAiEnabled(data.available))
+      .catch(() => setAiEnabled(false));
 
     return () => {
       if (recognitionRef.current) {
@@ -1096,6 +1103,11 @@ What specific health concern can I help you with today?`;
                     <Globe className="h-3 w-3 mr-1" />
                     {language === 'hi' ? 'हिंदी' : 'English'}
                   </Badge>
+                  {aiEnabled && (
+                    <Badge variant="default" className="text-xs bg-green-500">
+                      ✨ AI
+                    </Badge>
+                  )}
                 </div>
                 <Button
                   variant="ghost"

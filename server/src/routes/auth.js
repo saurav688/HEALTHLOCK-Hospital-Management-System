@@ -201,66 +201,38 @@ router.post("/login", loginLimiter, async (req, res) => {
   }
 });
 
-// Google OAuth login
-router.post("/google", authLimiter, async (req, res) => {
+// Step 1: Google login - verify token and send OTP to Gmail
+router.post("/google-otp-send", authLimiter, async (req, res) => {
   try {
     const { idToken, phone } = req.body;
 
     if (!idToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Google ID token is required"
-      });
+      return res.status(400).json({ success: false, message: "Google ID token is required" });
     }
 
     // Verify Google token
     const googleResult = await googleAuthService.verifyIdToken(idToken);
-    
     if (!googleResult.success) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Google token"
-      });
+      return res.status(400).json({ success: false, message: "Invalid Google token" });
     }
 
     const googleUser = googleResult.user;
 
-    // Check if user exists
+    // Find or create user
     let user = await User.findOne({
-      $or: [
-        { googleId: googleUser.googleId },
-        { email: googleUser.email }
-      ]
+      $or: [{ googleId: googleUser.googleId }, { email: googleUser.email }]
     });
 
-    if (user) {
-      // Update Google ID if not set
-      if (!user.googleId) {
-        user.googleId = googleUser.googleId;
-      }
-      
-      // Update profile picture if not set
-      if (!user.profilePicture && googleUser.profilePicture) {
-        user.profilePicture = googleUser.profilePicture;
-      }
-
-      // Mark email as verified if Google says it's verified
-      if (googleUser.isEmailVerified && !user.isEmailVerified) {
-        user.isEmailVerified = true;
-      }
-
-      user.lastLogin = new Date();
-      await user.save();
-    } else {
-      // Create new user
+    if (!user) {
+      // New user - phone required
       if (!phone) {
         return res.status(400).json({
           success: false,
-          message: "Phone number is required for new Google accounts"
+          message: "Phone number is required for new Google accounts",
+          requiresPhone: true
         });
       }
 
-      // Check if phone is already registered
       const existingPhone = await User.findOne({ phone });
       if (existingPhone) {
         return res.status(400).json({
@@ -271,33 +243,84 @@ router.post("/google", authLimiter, async (req, res) => {
 
       user = new User({
         firstName: googleUser.firstName,
-        lastName: googleUser.lastName,
+        lastName: googleUser.lastName || "User",
         email: googleUser.email,
-        phone: phone,
+        phone,
         googleId: googleUser.googleId,
         profilePicture: googleUser.profilePicture,
-        isEmailVerified: googleUser.isEmailVerified,
+        isEmailVerified: true,
         role: 'patient'
       });
-
-      // Generate phone OTP for verification
-      const phoneOTP = user.setPhoneOTP();
-      await user.save();
-
-      // Send SMS OTP
-      const smsResult = await smsService.sendOTP(phone, phoneOTP, 'verification');
-
-      // Send welcome SMS
-      await smsService.sendWelcomeSMS(phone, user.firstName);
+    } else {
+      // Update googleId if missing
+      if (!user.googleId) user.googleId = googleUser.googleId;
+      if (!user.profilePicture && googleUser.profilePicture) {
+        user.profilePicture = googleUser.profilePicture;
+      }
     }
 
-    // Generate tokens
+    // Generate OTP and send to Gmail
+    const otp = user.setEmailOTP();
+    await user.save();
+
+    // Log OTP in dev mode
+    console.log(`\n📧 Google Login OTP for ${user.email}: ${otp}\n`);
+
+    // Send OTP email
+    const emailResult = await emailService.sendOTPEmail(
+      user.email,
+      user.firstName,
+      otp,
+      'login'
+    );
+
+    res.json({
+      success: true,
+      message: `OTP sent to ${user.email}`,
+      data: {
+        email: user.email,
+        otpSent: emailResult.success,
+        isNewUser: !user._id
+      }
+    });
+
+  } catch (error) {
+    console.error("Google OTP send error:", error);
+    res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+  }
+});
+
+// Step 2: Verify Gmail OTP and complete Google login
+router.post("/google-otp-verify", authLimiter, async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({ success: false, message: "Email and OTP are required" });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Verify OTP (using emailOTP field)
+    const isValid = user.verifyEmailOTP(otp);
+    if (!isValid) {
+      await user.save();
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    user.lastLogin = new Date();
+    user.isEmailVerified = true;
+    await user.save();
+
     const accessToken = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
 
     res.json({
       success: true,
-      message: user.isNew ? "Account created successfully with Google" : "Login successful",
+      message: "Login successful",
       data: {
         user: {
           id: user._id,
@@ -310,20 +333,22 @@ router.post("/google", authLimiter, async (req, res) => {
           isPhoneVerified: user.isPhoneVerified,
           profilePicture: user.profilePicture
         },
-        tokens: {
-          accessToken,
-          refreshToken
-        }
+        tokens: { accessToken, refreshToken }
       }
     });
 
   } catch (error) {
-    console.error("Google login error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Google login failed. Please try again."
-    });
+    console.error("Google OTP verify error:", error);
+    res.status(500).json({ success: false, message: "OTP verification failed. Please try again." });
   }
+});
+
+// Legacy Google OAuth login (kept for compatibility)
+router.post("/google", authLimiter, async (req, res) => {
+  res.status(400).json({
+    success: false,
+    message: "Please use /google-otp-send and /google-otp-verify endpoints"
+  });
 });
 
 // Phone OTP login (passwordless)
